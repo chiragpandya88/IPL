@@ -1,0 +1,27 @@
+---
+title: "Project Proposal"
+author: "Chirag Pandya"
+date: "June 5, 2017"
+output: html_document
+---
+
+This project will examine the data from Kaggle's IPL [dataset](https://www.kaggle.com/manasgarg/ipl). Indian Premier League is on of the most sought after cricket tournament held in the month of March-May every year. Teams compete to get into the playoffs and finally winning the series. This dataset contains 2 files *deliveries.csv* and *matches.csv*. The *matches.csv* file contains details related to the match such as location, contesting teams, results, umpires,etc.This file contains 577 observations of 18 such variables. 
+```{r echo = FALSE}
+matches <- read.csv("matches.csv")
+deliveries <- read.csv("deliveries.csv")
+str(matches)
+```
+The *deliveries.csv* contains the ball-by-ball data of all the IPL matches including data of the batting team, batsman, bowler, non-striker, runs scored, etc.This file contains 136598 observations of 21 variables.
+```{r echo = FALSE}
+str(deliveries)
+```   
+There has been a lot of research for predicting winners of matches and series. The hypothetical client here may be from one of the teams playing in the IPL or a sports channel broadcasting the series and planning to show such analysis. Ideally if a demographic picture can be painted depicting predictions and factors affecting team wins, this could be directly helpful to make strategic decisions and for broadcasting to the viewers.  
+
+In my project, I propose to predict winner of the next match based on data of the current series and winner of the next match based on data from the previous year's series. Eventually there may be a chance to predict match results based on data from past 2-4 years but as the data gets older, the variables' associativity with the dependent variable, in this case predicting winners, will be lesser. The initial phase will be visualizing variables and their effects on the dependent variable. These visualizations will also help with data cleaning for eg:identify any outliers or removing null values.   
+The next phase will be preparing the data for predictive modelling. I will identify features which affect match results the most and build the feature vector for the dataset. This will be an evolving process. There are many features such as the number of matches a team has won against the competing team or the number of matches the team has won against everyone in the series. The next phase will analyse the associativity of these features and based on those results,more features can be identified or existing features may be removed.
+
+The next phase will be about working with different predictive models. The simplest choice to predict a categorical variable would be logistic regression but other effective methods such as Decision Trees and Support Vector Machines may be used depending upon their performance. Any of the above models will ultimately be used to predict the outcome of a given match.   
+
+Deliverables for the project will include the following:  
+1. The code for EDA and predictive modelling  
+2. A report that demonstrates the methodology used, reasons behind the methodology and some visualizations of variables' associativity with the predictions
