@@ -36,6 +36,8 @@ mT <- mT %>%
 #Win Percetage
 mT <- mutate(mT, "wPerc" = `Match Won`/matches * 100)
 
+
+
 #Matches won in 2015
 mT <- mT %>%
   left_join(matches %>%
@@ -44,7 +46,7 @@ mT <- mT %>%
               summarise("Match Won in 2015" = n()), by = "team")
 
 #Win percentage in 2015
-mT <- mutate(mT, "wPerc2015" = `Match Won in 2015`/matches * 100)
+#mT <- mutate(mT, "wPerc2015" = `Match Won in 2015`/matches * 100)
 
 #plotting wPerc
 ggplot(mT, aes(x = reorder(team, -`wPerc`), y = `wPerc`, fill = `wPerc`)) + 
