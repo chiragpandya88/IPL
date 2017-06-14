@@ -5,10 +5,10 @@ date: "June 14, 2017"
 output: html_document
 ---
 
-#The Question  
+##The Question  
 The question to be answered here is "Given the previous data, who will win the next scheduled match?". There are various factors affecting this prediction. This report shows the importance of some features which may prove significant for prediction and also identifies other features which I will calculate from the data sets. The importance of this calculated features can only be confirmed once I build a model for prediction. 
 
-#Data Sanity
+##Data Sanity
 The data is procured from a trusted source yet there are some sanity checks which are required to locate errors if any. I will start with reading the csv files.
 ```{r echo = FALSE}
 #Libraries
@@ -76,7 +76,7 @@ ggplot(matches[matches$win_by_wickets!=0,],aes(id,win_by_wickets,col= winner )) 
 
 There are not more than 5 matches out of 577 which we can caetgorize as unusual. This is possible and hence no cleaning or exploration is required. 
 
-#Exploration
+##Exploration
 I will start exploring the most basic features which contributes to the sentiments of the winning team. The first feature which I explore is toss statistics. I have plotted a graph to depict the behaviour of each team on winning or losing a toss. For that we add two more variables namely toss_match and winner_do. These variables show the team who won the toss won the match or not and what did the winning team opt for, i.e bat or field. 
 ```{r echo = FALSE}
 
@@ -297,59 +297,68 @@ team_performances
 
 These are some of the performance  metrics which affect team performance and may help in predicting wins in the future. The next section is about identify a feature vector to be provided to the model for prediction.
 
-#Feature Vector
+##Feature Vector
 
 The following are the suggested feature vectors. This list may change with time as per the deductions of importance from the model's Beta and t values. 
 
-
-Percentage of matches won by team 1
+###Percentage of matches won by team 1  
 int
 
-Number of matches won by team 1
+###Number of matches won by team 1  
 int
 
-Winning record (Number of matches won - number of matches lost)
-ternary int
-positive value = 1
-equal value = 0
-negative value = 1
+###Winning record (Number of matches won - number of matches lost)  
+ternary int  
+positive value = 1  
+equal value = 0  
+negative value = 1  
 
-Team1 home/away 
-Binary int
-home = 1
-away = 0
+###Team1 home/away  
+Binary int  
+home = 1  
+away = 0  
 
-Team2 home/away 
-Binary int
-home = 1
-away = 0
+###Team2 home/away   
+Binary int  
+home = 1  
+away = 0  
 
-Team1 toss win
-binary int
-win = 1
-lose = 0
+###Team1 toss win  
+binary int  
+win = 1  
+lose = 0  
 
-Team2 toss win
-binary int
-win = 1
-lose = 0
+###Team2 toss win  
+binary int  
+win = 1  
+lose = 0  
 
-Team1 net run rate i.e runrate of team1 - run rate of team2
-float
+###Team1 net run rate i.e runrate of team1 - run rate of team2  
+float  
 
-Team2 net run rate i.e runrate of team2 - run rate of team1
-float
+###Team2 net run rate i.e runrate of team2 - run rate of team1  
+float  
 
-Average run rate of team1
-float
+###Average run rate of team1  
+float  
 
-Average run rate of team2
-float
+###Average run rate of team2  
+float  
 
-Average wicket rate per over team1
-int (rounded)
+###Average wicket rate per over team1  
+int (rounded)  
 
-Average wicket rate per over team2
-int(rounded)
+###Average wicket rate per over team2  
+int(rounded)  
+
+###Team 1 Bat first/field first   
+Binary
+bat first = 1
+field first = 0
+
+###Team 2 Bat first/field first   
+Binary
+bat first = 1
+field first = 0
 
 
