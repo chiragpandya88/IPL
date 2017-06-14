@@ -1,9 +1,84 @@
-#packages : dplyr, tidyr,ggplot2
+---
+title: "Story"
+author: "Chirag Pandya"
+date: "June 14, 2017"
+output: html_document
+---
+
+#The Question  
+The question to be answered here is "Given the previous data, who will win the next scheduled match?". There are various factors affecting this prediction. This report shows the importance of some features which may prove significant for prediction and also identifies other features which I will calculate from the data sets. The importance of this calculated features can only be confirmed once I build a model for prediction. 
+
+#Data Sanity
+The data is procured from a trusted source yet there are some sanity checks which are required to locate errors if any. I will start with reading the csv files.
+```{r echo = FALSE}
+#Libraries
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(knitr)
 
 #Reading the csv
 matches <- read.csv("matches.csv")
 deliveries <- read.csv("deliveries.csv")
 
+#Merging the data sets
+ipl <- merge(deliveries, matches, by.x = "match_id", by.y = "id" )
+str(matches)
+str(deliveries)
+```
+
+Starting with season, the dataset contains data for 9 seasons so there should be 9 distinct values of season in the whole set and values from 2008 to 2016.  
+
+``` {r echo = FALSE}
+unique(matches$season)
+```
+
+Moving forward plotting the value of city will show if there are any outliers.
+``` {r echo = FALSE}
+ggplot(matches[which(!is.na(matches$city)),],aes(city,fill= city,rm.na=T)) +geom_bar() +
+theme(axis.text.x = element_text(angle = 90, hjust = 1))+ 
+ylab("Number of Matches Played") +
+guides(fill=FALSE)
+```
+
+The plot shows there are some blank values in the city. On further exploration, it was found that the city column was empty for matches in Dubai in the year 2014. This has been taken care of in the code. There are less number of matches in venues of South Africa as IPL 2009 was not held in India, due to the differences of Lalit Modi - Chairperson for IPL and the Indian home ministry. 
+
+Moving on the team columns should have 13 unique values as there have been 13 teams participating in IPL over 9 years. This is confirmed by the following. 
+```{r echo = FALSE}
+unique(matches$team1)
+unique(matches$team2)
+```
+
+Similary the toss decision variable should have a binary value of field or bat.
+```{r echo = FALSE}
+unique(matches$toss_decision)
+```
+
+Winner will have 14 distinct values i.e 13 for the teams and 1 when the match is tied. 
+```{r echo = FALSE}
+unique(matches$winner)
+```
+
+To find the number of outliers for the "win_by_runs" and "win_by_wickets" I have plotted both variables against the number of matches. This should give a fair idea if there is something wrong in the data.
+```{r echo = FALSE}
+ggplot(matches[matches$win_by_runs!=0,],aes(id,win_by_runs,col= winner )) + geom_point() +
+  ylab("Runs won by ") + xlab("Matches won by team batting first")+
+  ggtitle("Margin of Victories(Won by team batting first)")+ 
+  scale_y_continuous(breaks=c(0,25,50,75,100))+
+  geom_hline(yintercept = mean(matches[matches$win_by_runs!=0,]$win_by_runs),col="blue")
+  
+ggplot(matches[matches$win_by_wickets!=0,],aes(id,win_by_wickets,col= winner )) + geom_point() +
+  ylab("Wickets won by ") + xlab("Matches won by team bowling first")+
+  ggtitle("Margin of Victories(Won by team bowling first)")+
+  scale_y_continuous(breaks=c(2,4,6,8,10))+
+  geom_hline(yintercept = mean(matches[matches$win_by_wickets!=0,]$win_by_wickets),col="blue")
+```
+
+There are not more than 5 matches out of 577 which we can caetgorize as unusual. This is possible and hence no cleaning or exploration is required. 
+
+#Exploration
+I will start exploring the most basic features which contributes to the sentiments of the winning team. The first feature which I explore is toss statistics. I have plotted a graph to depict the behaviour of each team on winning or losing a toss. For that we add two more variables namely toss_match and winner_do. These variables show the team who won the toss won the match or not and what did the winning team opt for, i.e bat or field. 
+```{r echo = FALSE}
 
 
 #Tidying up
@@ -12,12 +87,6 @@ matches$toss_winner = matches$toss_winner %>% as.character()
 matches$winner = matches$winner %>% as.character()
 matches$winner = ifelse(matches$winner == "", "Tied", matches$winner) %>% as.factor()
 matches$date = as.Date(matches$date)
-#Missing values in city
-matches$city <- sub("^$", "Dubai", matches$city)
-
-
-#Merging the data sets
-ipl <- merge(deliveries, matches, by.x = "match_id", by.y = "id" )
 
 
 #New Features for EDA
@@ -31,16 +100,22 @@ ggplot(matches, aes(reorder(winner, date), fill = toss_match)) +
   ggtitle("Winning Team vs Winning Toss") + 
   scale_fill_discrete(guide = guide_legend(title = "toss_match")) +
   theme(axis.text.x=element_text(angle=75, hjust=1))
+```
 
-
-#Plotting Bat first/Field First of winning teams
+The plot shows that most teams have a higher winning percentage when they win the toss. The next feature which I will explore is "what does a winning team elect for: Bat OR Field". THis is to find out if there is a significant relevance of winning teams opting to bat or field first.
+```{r echo = FALSE}
 ggplot(matches, aes(reorder(winner, date), fill = winner_do)) + 
   geom_bar(color = "black", width = 0.8, position = position_dodge(width=0.8)) +
   xlab("Winning Team") + ylab("Number of wins") +
   ggtitle("Winning team bat first/field first") + 
   scale_fill_discrete(guide = guide_legend(title = "winner_do")) +
   theme(axis.text.x=element_text(angle=75, hjust=1))
+```   
 
+There are some very interesting fact depicted in this graph. The team Gujarat Lions seems to win most if it elects to field first. On the other hand teams like Chenna Superkings and Deccan chargers do well if they elect to bat first. Eventually, I will add a feature depicting whether the team elected to bat or field first.
+
+Third imporant feature amongst others is the performance of teams on home and away grounds. I beleived that teams playing on their home grounds would perform better. The graph depics the winning percentage of teams depending upon the location i.e "Home" or "Away"
+```{r echo = FALSE}
 #Team Performance at Home ground and Away
 t<-ipl %>% 
   filter((result=="normal" | result == "tie") & batting_team %in% c("Kolkata Knight Riders", "Royal Challengers Bangalore",
@@ -211,15 +286,70 @@ team_performances %>%
   labs(list(title = "Teams Performance", x = "Team", y = "Winning Percentage"))+
   theme(axis.text.x=element_text(angle=75, hjust=1), plot.title = element_text(size = 8, face = "bold"),text = element_text(size=8))
 
+```   
 
-#Tidying Toss Column Bat = 0 Field = 1
-temp.map <- c("field"=1,"bat"=0)
-matches$toss_decision <- temp.map[as.character(matches$toss_decision)]
+It seems that most teams perform well in their home grounds. Except for Gujarat Lions and Delhi Daredevils. On digging deeper, we find that Gujarat Lions have played only 16 matches as the team was formulated in 2016. Out of these 16 matches, they have played only 5 matches on their home ground. From these, they have won 2 matches. This is the reason for the anomaly in the graph and the data is too small to make a generalized statement about the team. This also depicts that predicting results for the team of Gujarat Lions may result in lesser accuracy. It may also be required to drop predictions for Gujarat Lions.
 
-#Modifying date - Converting to month
-matches$date <- format(matches$date,"%m")
-matches$date <- as.integer(matches$date)
+The following table shows the total number of matches played by each team on their home ground and away ground and their winning percentages. This should give a fair idea of the imporatance of home and away grounds.
+```{r echo = FALSE}
+team_performances
+```   
 
-#Modifying winner - team 1 winner value = 0 team2 winner value = 1 tied = -1
+These are some of the performance  metrics which affect team performance and may help in predicting wins in the future. The next section is about identify a feature vector to be provided to the model for prediction.
+
+#Feature Vector
+
+The following are the suggested feature vectors. This list may change with time as per the deductions of importance from the model's Beta and t values. 
+
+
+Percentage of matches won by team 1
+int
+
+Number of matches won by team 1
+int
+
+Winning record (Number of matches won - number of matches lost)
+ternary int
+positive value = 1
+equal value = 0
+negative value = 1
+
+Team1 home/away 
+Binary int
+home = 1
+away = 0
+
+Team2 home/away 
+Binary int
+home = 1
+away = 0
+
+Team1 toss win
+binary int
+win = 1
+lose = 0
+
+Team2 toss win
+binary int
+win = 1
+lose = 0
+
+Team1 net run rate i.e runrate of team1 - run rate of team2
+float
+
+Team2 net run rate i.e runrate of team2 - run rate of team1
+float
+
+Average run rate of team1
+float
+
+Average run rate of team2
+float
+
+Average wicket rate per over team1
+int (rounded)
+
+Average wicket rate per over team2
+int(rounded)
 
 
