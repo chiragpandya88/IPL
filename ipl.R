@@ -1,4 +1,8 @@
 #packages : dplyr, tidyr,ggplot2
+#Libraries
+library(dplyr)
+library(ggplot2)
+library(tidyr)
 
 #Reading the csv
 matches <- read.csv("matches.csv")
@@ -12,6 +16,7 @@ matches$toss_winner = matches$toss_winner %>% as.character()
 matches$winner = matches$winner %>% as.character()
 matches$winner = ifelse(matches$winner == "", "Tied", matches$winner) %>% as.factor()
 matches$date = as.Date(matches$date)
+
 #Missing values in city
 matches$city <- sub("^$", "Dubai", matches$city)
 
@@ -216,10 +221,24 @@ team_performances %>%
 temp.map <- c("field"=1,"bat"=0)
 matches$toss_decision <- temp.map[as.character(matches$toss_decision)]
 
-#Modifying date - Converting to month
+#Tidying data
 matches$date <- format(matches$date,"%m")
 matches$date <- as.integer(matches$date)
+matches$toss_decision = matches$toss_decision %>% as.factor()
+matches$city = matches$city %>% as.factor()
+matches$dl_applied <- NULL
+matches$result <- NULL
+matches$venue <- NULL
+matches$player_of_match <- NULL
+matches$win_by_runs <- NULL
+matches$win_by_wickets <- NULL
+matches$toss_match <- NULL
+matches$umpire1 <- NULL
+matches$umpire2 <- NULL
+matches$winner_do <- NULL
 
-#Modifying winner - team 1 winner value = 0 team2 winner value = 1 tied = -1
+write.csv(matches, file = "Matches_mod.csv",row.names = FALSE)
+
+
 
 
