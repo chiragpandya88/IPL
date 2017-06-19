@@ -82,10 +82,10 @@ for (i in 1:length(matches$id)) {
   } else if (matches$team2[i] == matches$winner[i]) {
     matches$winner[i] = 1
   } else {
-    matches$winner[i] = -1
+    matches$winner[i] = 0
   }
 }
-
+matches$winner <- matches$winner %>% as.numeric()
 #Team1 team 2 tosswin variable
 matches$t1tw <- NULL
 matches$t2tw <- NULL
@@ -124,7 +124,24 @@ for(i in 1:length(matches$id)) {
       matches$t2twbf[i] = 1
     }
   }
-}    
-    
+}  
 
-View(matches)
+mdf <- merge(merge(matches, matchesTeam, by.x=c("team1"), by.y=c("team"), all.x=TRUE),
+             matchesTeam, by.x=c("team2"), by.y=c("team"), all.x=TRUE)
+mdf <- with(mdf,  mdf[order(id) , ])
+mdf$toss_decision <- NULL
+mdf$date <- NULL
+mdf$toss_winner <- NULL
+mdf$result <- NULL
+mdf$dl_applied <- NULL
+mdf$player_of_match <- NULL
+mdf$venue <- NULL
+mdf$umpire1 <- NULL
+mdf$umpire2 <- NULL
+mdf <- rename(mdf,c("matches.x"="team1tm","Match Won.x"="team1mw","Win %.x"="team1wp","Win Record.x"="team1wr","Runs Scored.x"="team1rs","Runs Scored per Innings.x"="team1rspi","Wickets.x"="team1w","Wickets per inning.x"="team1wpi","matches.y" = "team2tm","Match Won.y"="team2mw","Win %.y" = "team2wp","Win Record.y"="team2wr","Runs Scored.y"="team2rs","Runs Scored per Innings.y"="team2rspi","Wickets.y"="team2w","Wickets per inning.y" = "team2wpi"))
+mdf<-mdf[,c(3,2,1,4,5,7:32,6)]
+
+#write.csv(mdf,file = "mdf.csv")
+str(mdf)
+
+View(mdf)
