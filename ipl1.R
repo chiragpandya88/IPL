@@ -138,10 +138,46 @@ mdf$player_of_match <- NULL
 mdf$venue <- NULL
 mdf$umpire1 <- NULL
 mdf$umpire2 <- NULL
-mdf <- rename(mdf,c("matches.x"="team1tm","Match Won.x"="team1mw","Win %.x"="team1wp","Win Record.x"="team1wr","Runs Scored.x"="team1rs","Runs Scored per Innings.x"="team1rspi","Wickets.x"="team1w","Wickets per inning.x"="team1wpi","matches.y" = "team2tm","Match Won.y"="team2mw","Win %.y" = "team2wp","Win Record.y"="team2wr","Runs Scored.y"="team2rs","Runs Scored per Innings.y"="team2rspi","Wickets.y"="team2w","Wickets per inning.y" = "team2wpi"))
+mdf <- plyr::rename(mdf,c("matches.x"="team1tm","Match Won.x"="team1mw","Win %.x"="team1wp","Win Record.x"="team1wr","Runs Scored.x"="team1rs","Runs Scored per Innings.x"="team1rspi","Wickets.x"="team1w","Wickets per inning.x"="team1wpi","matches.y" = "team2tm","Match Won.y"="team2mw","Win %.y" = "team2wp","Win Record.y"="team2wr","Runs Scored.y"="team2rs","Runs Scored per Innings.y"="team2rspi","Wickets.y"="team2w","Wickets per inning.y" = "team2wpi"))
 mdf<-mdf[,c(3,2,1,4,5,7:32,6)]
+rownames(mdf) <- 1:nrow(mdf)
+mdf$winner <- mdf$winner %>% as.factor()
+mdf$team1tm <- (mdf$team1tm - mean(mdf$team1tm))/sd(mdf$team1tm)
+mdf$team2tm <- (mdf$team2tm - mean(mdf$team2tm))/sd(mdf$team2tm)
+mdf$team1w <- (mdf$team1w - mean(mdf$team1w))/sd(mdf$team1w)
+mdf$team2w <- (mdf$team2w - mean(mdf$team2w))/sd(mdf$team2w)
+set.seed(123)
+x <- sample.split(mdf,SplitRatio = 0.90)
+train <- mdf[x,1:32]
+test <- mdf[!x,1:32]
 
-#write.csv(mdf,file = "mdf.csv")
-str(mdf)
+model <- glm (winner ~ t1ha + t1tw + team1tm + team1wp + team1rspi + team1w + t2ha + team2tm + team2wp + team2rspi + team2w, data = train, family = 'binomial')
+summary(model)
+predict <- predict(model,test, type = 'response')
+table(test$winner, predict > 0.5)
 
+
+fit <- rpart(winner ~ t1ha + t1tw + team1tm + team1wp + team1rspi + team1w + t2ha + team2tm + team2wp + team2rspi + team2w, data = train, method = 'class')
+predicted= predict(fit,test)
+rownames(predicted) <- 1:nrow(predicted)
+predicted[,1] <- round(predicted[,1])
+predicted[,2] <- round(predicted[,2])
+
+preddata <- predicted %>% as.data.frame()
+preddata$winner <- test$winner
+for(i in 1:72) {
+  if(preddata[i,1] == 1 & preddata[i,3] == 0 | preddata[i,2] == 1 & preddata[i,3] == 1){
+    preddata[i,4] = 1
+  } else {
+    preddata[i,4] = 0
+  }
+}
+sum(preddata$V4)
+View(preddata)
+
+fitrf <- randomForest(winner ~ t1ha + t1tw + team1tm + team1wp + team1rspi + team1w + t2ha + team2tm + team2wp + team2rspi + team2w , data = train)
+predictionrf <- predict(fitrf, test)
+#predictionrf<- round(predictionrf)
+table(predictionrf,test$winner)
+summary(predicted)
 View(mdf)
