@@ -1,7 +1,9 @@
 #packages : dplyr, tidyr,ggplot2
 #Libraries
-#library(dplyr)
-#library(tidyr)
+library(dplyr)
+library(caTools)
+library(rpart)
+library(randomForest)
 
 #Reading the csv
 matches <- read.csv("matches.csv")
@@ -172,12 +174,10 @@ for(i in 1:72) {
     preddata[i,4] = 0
   }
 }
-sum(preddata$V4)
+sum(preddata$V4)/72 * 100
 View(preddata)
 
 fitrf <- randomForest(winner ~ t1ha + t1tw + team1tm + team1wp + team1rspi + team1w + t2ha + team2tm + team2wp + team2rspi + team2w , data = train)
 predictionrf <- predict(fitrf, test)
-#predictionrf<- round(predictionrf)
 table(predictionrf,test$winner)
-summary(predicted)
-View(mdf)
+

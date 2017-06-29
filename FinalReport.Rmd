@@ -1,0 +1,611 @@
+---
+title: 'IPL Match Win Predictor: Final Report'
+author: "Chirag Pandya"
+date: "June 26, 2017"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+\newpage
+##Introduction
+The Indian Premier League (IPL) is a professional cricket league in India, which is held during April and May each year. Each team plays all other teams twice in a round-robin format.At the conclusion of the first stage, the top four teams will qualify for the Playoffs. The top two teams from the league phase will play against each other and the winner goes straight to the IPL final. The losing team plays the winner of the second match between the third and fourth team. 
+
+##The Question Phase and some insights
+The question which I will answer by the end of this project is "Given the previous data of IPL matches, who will win the next match?". There are various features which would contribute to predicting this outcome. This report shows the importance of some features which may prove significant for prediction and also identifies other features which will be calculated from the data sets. The importance of all these features will be confirmed with help of t-values and Beta constants determined by the prediction model. The model will predict a winner- team1 or team2. The team number will then be mapped to the name of the team for meaningful inference. 
+
+##The Model  
+There are many machine learning models which can predict a categorical output. The most frequently used are logistic regression, Decision Trees and SVMs.I will be using decision trees for modelling my training set and applying the model to predict values on a test data set. The same procedure will be done for logistic regression. A comparison of the two models' accuracy will be ascertained. The plan also involves working with SVM's as they handle prediction well when the training dataset has limited number of observations. 
+
+##Data Sanity / Tidying
+The data is procured from a trusted source yet there are some sanity checks which are required to locate errors if any. I will start with reading the two csv files "matches.csv" and "deliveries.csv".
+```{r echo = FALSE,include=FALSE, cache=FALSE}
+#Libraries
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(caTools)
+library(rpart)
+library(randomForest)
+library(rpart.plot)
+```
+
+```{r echo = FALSE}
+#Reading the csv
+matches <- read.csv("matches.csv")
+deliveries <- read.csv("deliveries.csv")
+
+#Merging the data sets
+ipl <- merge(deliveries, matches, by.x = "match_id", by.y = "id" )
+str(matches)
+str(deliveries)
+```
+
+In the "season" variable, the dataset contains data for 9 seasons. There should be 9 distinct values for season in the data set and values should range from 2008 to 2016. The following snippet is the output of the unique command.
+
+``` {r echo = FALSE}
+unique(matches$season)
+```
+
+\newpage
+Moving forward plotting the value of the "city" variable will show if there are any anomalies.  
+
+``` {r echo = FALSE}
+ggplot(matches[which(!is.na(matches$city)),],aes(city,fill= city,rm.na=T)) +geom_bar() +
+theme(axis.text.x = element_text(angle = 90, hjust = 1))+ 
+ylab("Number of Matches Played") +
+guides(fill=FALSE)
+```
+
+The plot shows that there are some blank observations in the "city" variable. On further exploration, it was found that the "city" variable was empty for matches in Dubai in the year 2014. This is rectified in the tidying phase of the project. There are less number of matches in venues located in South Africa. This is because IPL was held in South Africa instead of India in 2009.
+
+Moving on,the "team" variables should have 13 unique values. Till date 13 teams have participated in IPL over 9 years. This is confirmed by the following unique command on "team1" and "team2" variables.
+
+```{r echo = FALSE}
+unique(matches$team1)
+unique(matches$team2)
+```
+\newpage
+Similary the "toss decision" variable should have a binary value of field or bat.
+```{r echo = FALSE}
+unique(matches$toss_decision)
+```
+
+"Winner"" variable should have 14 distinct values i.e 13 for the team names and 1 value for when the match is tied. 
+```{r echo = FALSE}
+unique(matches$winner)
+```
+
+To find the number of outliers for the "win_by_runs" and "win_by_wickets", a plot is generated to map these variables against number of matches.   
+
+```{r echo = FALSE}
+ggplot(matches[matches$win_by_runs!=0,],aes(id,win_by_runs,col= winner )) + geom_point() +
+  ylab("Runs won by ") + xlab("Matches won by team batting first")+ ggtitle("Margin of Victories(Won by team batting first)")+ 
+  scale_y_continuous(breaks=c(0,25,50,75,100))+
+  geom_hline(yintercept = mean(matches[matches$win_by_runs!=0,]$win_by_runs),col="blue")
+  
+ggplot(matches[matches$win_by_wickets!=0,],aes(id,win_by_wickets,col= winner )) + geom_point() +
+  ylab("Wickets won by ") + xlab("Matches won by team bowling first")+
+  ggtitle("Margin of Victories(Won by team bowling first)")+
+  scale_y_continuous(breaks=c(2,4,6,8,10))+
+  geom_hline(yintercept = mean(matches[matches$win_by_wickets!=0,]$win_by_wickets),col="blue")
+```
+
+There are not more than 5 matches out of 577 which can be caetgorized as unusual. This is possible and hence no tidying or exploration is required. 
+
+##Exploration
+I will start exploring the most basic features which contributes to the sentiments of the winning team. Once these features are generated the machine learning model (Decision Trees) will make necessary inferences about the performance of each team. 
+
+The first feature which I explore is toss statistics. I have plotted a graph to depict the outcomes of each team on winning or losing a toss. For that we add two more variables namely "toss_match" and "winner_do". "toss_match"" variable shows that the team who won the toss won the match, and "winner_do" variable will indicate  what the winning team opted for, i.e bat or field first.
+```{r echo = FALSE}
+
+
+#Tidying up
+matches$umpire3 <- NULL
+matches$toss_winner = matches$toss_winner %>% as.character()
+matches$winner = matches$winner %>% as.character()
+matches$winner = ifelse(matches$winner == "", "Tied", matches$winner) %>% as.factor()
+matches$date = as.Date(matches$date)
+
+
+#New Features for EDA
+matches$toss_match = ifelse(matches$toss_winner == matches$winner, 1, 0) %>% as.factor()
+matches$winner_do = ifelse(matches$win_by_runs>0, "bat", "field") %>% as.factor()
+
+#Plotting toss win against number of wins
+ggplot(matches, aes(reorder(winner, date), fill = toss_match)) + 
+  geom_bar(color = "black", width = 0.8, position = position_dodge(width=0.8)) +
+  xlab("Winning Team") + ylab("Number of wins") +
+  ggtitle("Winning Team vs Winning Toss") + 
+  scale_fill_discrete(guide = guide_legend(title = "toss_match")) +
+  theme(axis.text.x=element_text(angle=75, hjust=1))
+```
+
+The plot shows that most teams have a higher winning percentage when they win the toss.   
+
+The next feature which I will explore is "what does a winning team elect for: Bat or Field first". This is to determine if there is a significant relevance of winning teams opting to bat or field.
+```{r echo = FALSE}
+ggplot(matches, aes(reorder(winner, date), fill = winner_do)) + 
+  geom_bar(color = "black", width = 0.8, position = position_dodge(width=0.8)) +
+  xlab("Winning Team") + ylab("Number of wins") +
+  ggtitle("Winning team bat first/field first") + 
+  scale_fill_discrete(guide = guide_legend(title = "winner_do")) +
+  theme(axis.text.x=element_text(angle=75, hjust=1))
+```   
+
+There are some very interesting inferences in this graph. The team Gujarat Lions performs betterwhen it elects to field first. On the other hand, teams like Chennai Superkings and Deccan chargers do well when they elect to bat first. These inferences will help make deductions about the strength of each team. 
+
+Another imporant feature is the performance of teams on home and away grounds. It is a common notion that teams playing on their home grounds would perform better. The graph depicts the winning percentage of teams depending upon the location i.e "Home" or "Away"  
+
+```{r echo = FALSE}
+#Team Performance at Home ground and Away
+t<-ipl %>% 
+  filter((result=="normal" | result == "tie") & batting_team %in% c("Kolkata Knight Riders", "Royal Challengers Bangalore",
+                                                                    "Chennai Super Kings","Kings XI Punjab","Rajasthan Royals",
+                                                                    "Delhi Daredevils","Mumbai Indians","Gujarat Lions"))
+
+#KKR Perforamance
+kkr_match_played<-t %>% 
+  filter(batting_team=="Kolkata Knight Riders") %>% 
+  mutate(ground_type = if_else(city == "Kolkata","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_match_played = n_distinct(match_id))
+
+kkr_match_won<-t %>% 
+  filter(batting_team=="Kolkata Knight Riders" & winner == "Kolkata Knight Riders") %>% 
+  mutate(ground_type = if_else(city == "Kolkata","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_win = n_distinct(match_id))
+
+KKR<-merge(kkr_match_played, kkr_match_won, by ="ground_type")
+
+KKR<-KKR %>% 
+  mutate(winning_perc = (total_win/total_match_played)*100,
+         team = "KKR") 
+
+#Chennai Super Kings
+csk_match_played<-t %>% 
+  filter(batting_team=="Chennai Super Kings") %>% 
+  mutate(ground_type = if_else(city == "Chennai","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_match_played = n_distinct(match_id))
+
+csk_match_won<-t %>% 
+  filter(batting_team=="Chennai Super Kings" & winner == "Chennai Super Kings") %>% 
+  mutate(ground_type = if_else(city == "Chennai","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_win = n_distinct(match_id))
+
+CSK<-merge(csk_match_played, csk_match_won, by ="ground_type")
+
+CSK<-CSK %>% 
+  mutate(winning_perc = (total_win/total_match_played)*100,
+         team ="CSK") 
+
+#Mumbai Indians
+mi_match_played<-t %>% 
+  filter(batting_team=="Mumbai Indians") %>% 
+  mutate(ground_type = if_else(city == "Mumbai","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_match_played = n_distinct(match_id))
+
+mi_match_won<-t %>% 
+  filter(batting_team=="Mumbai Indians" & winner == "Mumbai Indians") %>% 
+  mutate(ground_type = if_else(city == "Mumbai","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_win = n_distinct(match_id))
+
+MI<-merge(mi_match_played, mi_match_won, by ="ground_type")
+
+MI<-MI %>% 
+  mutate(winning_perc = (total_win/total_match_played)*100,
+         team= "MI") 
+
+#Kings XI punjab
+KXIP_match_played<-t %>% 
+  filter(batting_team=="Kings XI Punjab") %>% 
+  mutate(ground_type = if_else(city == "Chandigarh","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_match_played = n_distinct(match_id))
+
+KXIP_match_won<-t %>% 
+  filter(batting_team=="Kings XI Punjab" & winner == "Kings XI Punjab") %>% 
+  mutate(ground_type = if_else(city == "Chandigarh","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_win = n_distinct(match_id))
+
+KXIP<-merge(KXIP_match_played, KXIP_match_won, by ="ground_type")
+
+KXIP<-KXIP %>% 
+  mutate(winning_perc = (total_win/total_match_played)*100,
+         team="KXIP") 
+#Rajasthan Royal
+RR_match_played<-t %>% 
+  filter(batting_team=="Rajasthan Royals") %>% 
+  mutate(ground_type = if_else(city == "Jaipur","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_match_played = n_distinct(match_id))
+
+RR_match_won<-t %>% 
+  filter(batting_team=="Rajasthan Royals" & winner == "Rajasthan Royals") %>% 
+  mutate(ground_type = if_else(city == "Jaipur","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_win = n_distinct(match_id))
+
+RR<-merge(RR_match_played, RR_match_won, by ="ground_type")
+
+RR<-RR %>% 
+  mutate(winning_perc = (total_win/total_match_played)*100,
+         team = "RR") 
+
+#Royal Challengers Bangalore
+RCB_match_played<-t %>% 
+  filter(batting_team=="Royal Challengers Bangalore") %>% 
+  mutate(ground_type = if_else(city == "Bangalore","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_match_played = n_distinct(match_id))
+
+RCB_match_won<-t %>% 
+  filter(batting_team=="Royal Challengers Bangalore" & winner == "Royal Challengers Bangalore") %>% 
+  mutate(ground_type = if_else(city == "Bangalore","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_win = n_distinct(match_id))
+
+RCB<-merge(RCB_match_played, RCB_match_won, by ="ground_type")
+
+RCB<-RCB %>% 
+  mutate(winning_perc = (total_win/total_match_played)*100,
+         team ="RCB")
+
+#Delhi Daredevils
+
+DD_match_played<-t %>% 
+  filter(batting_team=="Delhi Daredevils") %>% 
+  mutate(ground_type = if_else(city == "Delhi","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_match_played = n_distinct(match_id))
+
+DD_match_won<-t %>% 
+  filter(batting_team=="Delhi Daredevils" & winner == "Delhi Daredevils") %>% 
+  mutate(ground_type = if_else(city == "Delhi","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_win = n_distinct(match_id))
+
+DD<-merge(DD_match_played, DD_match_won, by ="ground_type")
+
+DD<-DD %>% 
+  mutate(winning_perc = (total_win/total_match_played)*100,
+         team = "DD")
+
+
+#Gujarat Lions
+
+GL_match_played<-t %>% 
+  filter(batting_team=="Gujarat Lions") %>% 
+  mutate(ground_type = if_else(city == "Rajkot","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_match_played = n_distinct(match_id))
+
+GL_match_won<-t %>% 
+  filter(batting_team=="Gujarat Lions" & winner == "Gujarat Lions") %>% 
+  mutate(ground_type = if_else(city == "Rajkot","Home","Away")) %>% 
+  group_by(ground_type) %>% 
+  summarise(total_win = n_distinct(match_id))
+
+GL<-merge(GL_match_played, GL_match_won, by ="ground_type")
+
+GL <-GL %>% 
+  mutate(winning_perc = (total_win/total_match_played)*100,
+         team = "GL")
+
+team_performances<-rbind(CSK,DD,KKR,MI,KXIP,RCB,RR,GL)
+team_performances <- team_performances[,c(5,1,2,3,4)]
+View(team_performances)
+
+team_performances %>% 
+  ggplot(aes(x = team, y = winning_perc,fill = ground_type))+
+  geom_bar(stat = "identity", position = "dodge")+
+  labs(list(title = "Teams Performance", x = "Team", y = "Winning Percentage"))+
+  theme(axis.text.x=element_text(angle=75, hjust=1), plot.title = element_text(size = 8, face = "bold"),text = element_text(size=8))
+
+```   
+
+Most teams perform well on their home ground, with the exception of Gujarat Lions and Delhi Daredevils. However,Gujarat Lions has played only 16 matches as it is a new team. This is the reason for the anomaly in the graph. The data is too small to make a generalized statement about the team's performance on home/ away grounds. Eventually, this data will be normalized against a fixed number of matches to reduce the skew in the plot. The following table shows the total number of matches played by each team on their home ground and away ground and their winning percentages.
+
+```{r echo = FALSE}
+team_performances
+```   
+
+The above performance metrics may help in predicting wins in the future. The next section is about identifying a feature vector to be provided to the model for prediction.
+
+##Feature Engineering
+
+The following are the suggested features which are known to directly contribute to the performance of a team. These features will be calculated and provided as input to the machine learning model which can then be used to predict future matches.
+ 
+###Season  
+Depicts the year of the match
+Data type: int (to be converted to factor if needed)
+
+###city 
+Data type: factor  
+
+###team1 toss win
+Data type: binary int
+Possible outcomes : 1 if team1 won thte toss and 0 if it lost the toss  
+
+###team2 toss win
+Data type: binary int
+Possible outcomes : 1 if team2 won thte toss and 0 if it lost the toss  
+
+###team1 bat/field first
+Data type: binary int
+Possible outcomes: 1 if team1 fields first and 0 if it bats first  
+
+###team2 bat/field first
+Data type: binary int
+Possible outcomes: 1 if team2 fields first and 0 if it bats first  
+
+###Percentage of matches won by team 1  
+Data type: float
+
+###Number of matches won by team 1  
+Data type: int
+
+###Winning record of team 1(Number of matches won - number of matches lost)  
+Data type: ternary int  
+positive value = 1  
+equal value = 0  
+negative value = -1  
+
+###Percentage of matches won by team 2
+Data type: float
+
+###Number of matches won by team 2 
+Data type: int
+
+###Winning record team 2 (Number of matches won - number of matches lost)  
+Data type: ternary int  
+positive value = 1  
+equal value = 0  
+negative value = -1  
+
+###Team1 home/away  
+Data type: Binary int  
+home = 1  
+away = 0  
+
+###Team2 home/away   
+Data type: Binary int  
+home = 1  
+away = 0  
+
+###Average run rate of team1  
+Data type: float  
+
+###Average run rate of team2  
+Data type: float  
+
+###Difference of run rate team1 - team2
+Data type: ternary int
+positive = 1
+zero = 0 
+negative = -1
+
+###Average wicket rate per over team1  
+Data type: int (rounded)  
+
+###Average wicket rate per over team2  
+Data type: int (rounded)  
+
+##Applying Machine Learning  
+After normalizing variables such as "number of runs scored by a team" and "number of wickets taken by a team", I started applying machine learning models such as Logistic Regression, Decision Trees, and Random Forests. With a limited number of observations, the accuracy of the models may be affected. To summarize, we have plotted features with respect to the performance of team1 and team2. We are predicting which team will win from team1 and team2. 
+
+###Logistic Regression
+
+Logistic Regression is the simplest and fastest when it comes to predicting categorical variables. I created a model using 90% of the dataset as training and rest as testing. In the first iteration, I used all the features listed in the previous section. The summary of the model is shown below.
+
+```{r echo = FALSE}
+#Reading the csv
+matches <- read.csv("matches.csv")
+deliveries <- read.csv("deliveries.csv")
+
+#Cleaning up
+matches$umpire3 <- NULL
+matches$toss_winner = matches$toss_winner %>% as.character()
+matches$winner = matches$winner %>% as.character()
+matches$winner = ifelse(matches$winner == "", "Tied", matches$winner)  %>% as.character() 
+matches$date = as.Date(matches$date)
+
+matches$team2 = matches$team2 %>% as.character()
+matches$team1 = matches$team1 %>% as.character()
+matches$toss_decision = matches$toss_decision %>% as.character()
+
+#Missing values in city
+matches$city <- sub("^$", "Dubai", matches$city)
+
+#Team1 Home/Away
+matches <-mutate(matches,t1ha = ifelse(team1 == "Deccan Chargers" & city == "Hyderabad",1,ifelse(team1 == "Kochi Tuskers Kerala" & city == "Kochi" | city == "Indore",1,ifelse(team1 == "Rajasthan Royals" & city == "Jaipur",1,ifelse(team1 == "Delhi Daredevils" & city == "Delhi",1,ifelse(team1 == "Chennai Superkings" & city == "Chennai",1,ifelse(team1 == "Kings XI Punjab" & city == "Mohali",1,ifelse(team1 == "Pune Warriors" & city == "Pune",1,ifelse(team1 == "Mumbai Indians" & city == "Mumbai",1,ifelse(team1 == "Royal Challengers Bangalore" & city == "Bangalore",1,ifelse(team1 == "Kolkata Knight Riders" & city == "Kolkata",1,ifelse(team1 == "Sunrisers Hyderabad" & city == "Hyderabad",1,ifelse(team1 == "Gujarat Lions" & city == "Rajkot",1,ifelse(team1 == "Rising Pune Supergiants" & city == "Pune",1,0))))))))))))))
+#Team2 Home/Away
+matches <-mutate(matches,t2ha = ifelse(team2 == "Deccan Chargers" & city == "Hyderabad",1,ifelse(team2 == "Kochi Tuskers Kerala" & city == "Kochi" | city == "Indore",1,ifelse(team2 == "Rajasthan Royals" & city == "Jaipur",1,ifelse(team2 == "Delhi Daredevils" & city == "Delhi",1,ifelse(team2 == "Chennai Superkings" & city == "Chennai",1,ifelse(team2 == "Kings XI Punjab" & city == "Mohali",1,ifelse(team2 == "Pune Warriors" & city == "Pune",1,ifelse(team2 == "Mumbai Indians" & city == "Mumbai",1,ifelse(team2 == "Royal Challengers Bangalore" & city == "Bangalore",1,ifelse(team2 == "Kolkata Knight Riders" & city == "Kolkata",1,ifelse(team2 == "Sunrisers Hyderabad" & city == "Hyderabad",1,ifelse(team2 == "Gujarat Lions" & city == "Rajkot",1,ifelse(team2 == "Rising Pune Supergiants" & city == "Pune",1,0))))))))))))))
+
+#Number of matches played by each team
+matchesTeam <- matches %>%
+  group_by(team = team1) %>%
+  summarise(matches = n())%>%
+  full_join(matches %>%
+              group_by(team = team2)%>%
+              summarise(matches = n()), by = "team") %>%
+  mutate("matches" = `matches.x` + `matches.y`)%>%
+  select(team, matches)
+
+options(digit = 2)
+
+#Matches Won
+matchesTeam <- matchesTeam %>%
+  left_join(matches %>%
+              filter(winner != "")%>%
+              group_by(team = winner)%>%
+              summarise("Match Won" = n()), by = "team")
+
+matchesTeam$team <- as.factor(matchesTeam$team)
+
+
+#Win Percetage
+matchesTeam <- mutate(matchesTeam, "Win %" = `Match Won`/matches * 100)
+
+#Winning record
+matchesTeam <- mutate(matchesTeam, "Win Record" = `matches` - `Match Won`)
+
+#Runs Scored
+matchesTeam <- matchesTeam %>%
+  left_join(deliveries %>%
+              group_by(team = batting_team)%>%
+              summarise("Runs Scored" = sum(total_runs)), by = "team")
+
+#Average Runs Scored in an Innings
+matchesTeam <- mutate(matchesTeam, "Runs Scored per Innings" = `Runs Scored`/matches)
+matchesTeam$`Runs Scored per Innings` <- ceiling(matchesTeam$`Runs Scored per Innings`)
+
+#Wickets
+matchesTeam <- matchesTeam %>%
+  left_join(deliveries %>%
+              group_by(team = bowling_team)%>%
+              summarise("Wickets" = sum(player_dismissed!="")), by = "team")
+
+#Average wickets in an Innings
+matchesTeam <- mutate(matchesTeam, "Wickets per inning" = `Wickets`/matches)
+matchesTeam$`Wickets per inning` <- ceiling(matchesTeam$`Wickets per inning`)
+
+View(matchesTeam)
+#Tidying winner variable
+for (i in 1:length(matches$id)) {
+  if (matches$team1[i] == matches$winner[i]) {
+    matches$winner[i] = 0
+  } else if (matches$team2[i] == matches$winner[i]) {
+    matches$winner[i] = 1
+  } else {
+    matches$winner[i] = 0
+  }
+}
+matches$winner <- matches$winner %>% as.numeric()
+#Team1 team 2 tosswin variable
+matches$t1tw <- NULL
+matches$t2tw <- NULL
+for (i in 1:length(matches$id)) {
+  if (matches$team1[i] == matches$toss_winner[i]) {
+    matches$t1tw[i] = 1
+    matches$t2tw[i] = 0
+  } else {
+    matches$t1tw[i] = 0
+    matches$t2tw[i] = 1
+  }
+}
+
+#Team1 team 2 batfirst field first variable
+matches$t1twbf <- 0
+matches$t1twff <- 0
+matches$t2twbf <- 0
+matches$t2twff <- 0
+
+for(i in 1:length(matches$id)) {
+  if(matches$t1tw[i] == 1){
+  
+    if(matches$toss_decision[i] == "field"){
+      matches$t1twff[i] = 1
+      matches$t1twbf[i] = -1
+    } else {
+      matches$t1twff[i] = -1
+      matches$t1twbf[i] = 1
+      }
+  } else {
+    if(matches$toss_decision[i] == "field"){
+      matches$t2twff[i] = 1
+      matches$t2twbf[i] = -1
+    } else {
+      matches$t2twff[i] = -1
+      matches$t2twbf[i] = 1
+    }
+  }
+}  
+
+mdf <- merge(merge(matches, matchesTeam, by.x=c("team1"), by.y=c("team"), all.x=TRUE),
+             matchesTeam, by.x=c("team2"), by.y=c("team"), all.x=TRUE)
+mdf <- with(mdf,  mdf[order(id) , ])
+mdf$toss_decision <- NULL
+mdf$date <- NULL
+mdf$toss_winner <- NULL
+mdf$result <- NULL
+mdf$dl_applied <- NULL
+mdf$player_of_match <- NULL
+mdf$venue <- NULL
+mdf$umpire1 <- NULL
+mdf$umpire2 <- NULL
+mdf <- plyr::rename(mdf,c("matches.x"="team1tm","Match Won.x"="team1mw","Win %.x"="team1wp","Win Record.x"="team1wr","Runs Scored.x"="team1rs","Runs Scored per Innings.x"="team1rspi","Wickets.x"="team1w","Wickets per inning.x"="team1wpi","matches.y" = "team2tm","Match Won.y"="team2mw","Win %.y" = "team2wp","Win Record.y"="team2wr","Runs Scored.y"="team2rs","Runs Scored per Innings.y"="team2rspi","Wickets.y"="team2w","Wickets per inning.y" = "team2wpi"))
+mdf<-mdf[,c(3,2,1,4,5,7:32,6)]
+rownames(mdf) <- 1:nrow(mdf)
+mdf$winner <- mdf$winner %>% as.factor()
+mdf$team1tm <- (mdf$team1tm - mean(mdf$team1tm))/sd(mdf$team1tm)
+mdf$team2tm <- (mdf$team2tm - mean(mdf$team2tm))/sd(mdf$team2tm)
+mdf$team1w <- (mdf$team1w - mean(mdf$team1w))/sd(mdf$team1w)
+mdf$team2w <- (mdf$team2w - mean(mdf$team2w))/sd(mdf$team2w)
+set.seed(123)
+x <- sample.split(mdf,SplitRatio = 0.90)
+train <- mdf[x,1:32]
+test <- mdf[!x,1:32]
+
+model <- glm (winner ~ t1ha + t1tw + t1twbf + t1twff + team1tm + team1mw + team1wp + team1wr + team1rs + team1rspi + team1w + team1wpi + t2ha + t2tw + t2twbf + t2twff + team2tm + team2mw + team2wp + team2wr + team2rs + team2rspi + team2w + team2wpi, data = train, family = 'binomial')
+summary(model)
+```
+The model shows extreme collinearity in the features of teams batting or fielding first after winning or losing the toss. This is attributed to the original arrangement of data. Depending on the toss win, the data is arranged in such a way that team1 always bats first and team2 fields first. Removing these features from the model also increases the accuracy of predictions.  
+
+After trying various combinations of features, the final model predicts match wins with an accuracy of 62.5% which is an improvement from the first model which had an accuracy of about 55%. The model takes home advantage, total matches, toss win, winning percentage, runs per inning and total wickets of a team as features. The model also shows the significance of team1 and team2 home advantage. Home advantage is a thing, was also proved in our EDA section. 
+
+The confusion matrix of the model is shown below. 
+
+```{r echo = FALSE}
+model <- glm (winner ~ t1ha + t1tw + team1tm + team1wp + team1rspi + team1w + t2ha + team2tm + team2wp + team2rspi + team2w, data = train, family = 'binomial')
+predict <- predict(model,test, type = 'response')
+table(test$winner, predict > 0.5)
+```
+\newpage
+###Decision Trees
+A decision tree is a decision support tool that uses a tree-like graph or model of decisions and their possible consequences, including chance event outcomes, resource costs, and utility. In this case, the performance of decision trees is inferior to that of logistic regression. The tree and its accuracy are shown below.   
+
+```{r echo= FALSE}
+fit <- rpart(winner ~ t1ha + t1tw + team1tm + team1wp + team1rspi + team1w + t2ha + team2tm + team2wp + team2rspi + team2w, data = train, method = 'class')
+predicted= predict(fit,test)
+rownames(predicted) <- 1:nrow(predicted)
+predicted[,1] <- round(predicted[,1])
+predicted[,2] <- round(predicted[,2])
+
+preddata <- predicted %>% as.data.frame()
+preddata$winner <- test$winner
+for(i in 1:72) {
+  if(preddata[i,1] == 1 & preddata[i,3] == 0 | preddata[i,2] == 1 & preddata[i,3] == 1){
+    preddata[i,4] = 1
+  } else {
+    preddata[i,4] = 0
+  }
+}
+rpart.plot(fit)
+sum(preddata$V4)/72 * 100
+```
+
+\newpage
+###Random Forest
+Random forests or random decision forests are an ensemble learning method for classification, regression and other tasks, that operate by constructing a multitude of decision trees at training time and outputting the class that is the mode of the classes (classification) or mean prediction (regression) of the individual trees.
+
+In our case the performance of random forests is even lower than that of decision trees i.e 51.33% accuracy. This can be attributed to the fact that we have limited number of observation in our data set. This also proves that in some cases, logistic regression performs better than other machine learning models when the dataset is small. 
+
+``` {r echo = FALSE}
+fitrf <- randomForest(winner ~ t1ha + t1tw + team1tm + team1wp + team1rspi + team1w + t2ha + team2tm + team2wp + team2rspi + team2w , data = train)
+predictionrf <- predict(fitrf, test)
+table(predictionrf,test$winner)
+plot(fitrf)
+```
+
+\newpage
+##Conclusion and Future updates  
+
+It is evident that match win predictions highly rely on teams playing on home ground. Another important feature is the runs scored per innings by each team. The next iteration of the project would include calculating the strength of players of each team. The player strength index can then help build team strength index. This could be an important feature for predicting match outcomes. he predictor has to be combined with other staking strategies for increased accuracy. 
